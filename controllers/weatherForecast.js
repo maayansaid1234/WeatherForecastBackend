@@ -3,41 +3,68 @@ import axios from 'axios';
 async function getForecast(req, res) {
   const { city } = req.params;
   const apiKey = process.env.WEATHER_API_SECRET_KEY;
-
-  const url = `http://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city}&days=2&aqi=no&alerts=no`;
+  const forecastUrl = `http://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city}&days=2&aqi=no&alerts=no`;
 
   try {
-    const response = await axios.get(url);
+    // Fetch forecast data
+    let response = await axios.get(forecastUrl);
     const data = response.data;
-    
+
     // Get the local time of the city
     const localTime = new Date(data.location.localtime);
     const currentHour = localTime.getHours();
 
-    // Function to get the correct hour, considering day changes
-    const getHourData = (hourOffset) => {
-      let targetDate = new Date(localTime);
-      targetDate.setHours(currentHour + hourOffset, 0, 0, 0);
+    let previousDayData = null;
 
-      const dayIndex = targetDate.getDate() === localTime.getDate() ? 0 : 1;
-      const hourData = data.forecast.forecastday[dayIndex].hour[targetDate.getHours()];
+    // Check if we need previous day's data
+    if (currentHour <= 2) {
+      const previousDate = new Date(localTime);
+      // previousDate.setDate(localTime.getDate() );
+      const previousDayStr = previousDate.toISOString().split('T')[0];
+      console.log(previousDayStr)
+      console.log(currentHour)
+      const historyUrl = `http://api.weatherapi.com/v1/history.json?key=${apiKey}&q=${city}&dt=${previousDayStr}`;
+      const previousResponse = await axios.get(historyUrl);
+      previousDayData = previousResponse.data;
+    }
+
+    // Function to get the correct hour, considering day changes
+    const getHourData = (date, hourOffset) => {
+      let targetDate = new Date(date);
+      targetDate.setHours(date.getHours() + hourOffset, 0, 0, 0);
+
+      let dayData = data.forecast.forecastday[0]; // Default to today's data
+      if (targetDate.getDate() === date.getDate() - 1) {
+        // Previous day data
+        if (previousDayData) {
+          console.log("previous")
+          dayData = previousDayData.forecast.forecastday[0];
+        }
+      } else if (targetDate.getDate() === date.getDate() + 1) {
+        // Next day data (tomorrow)
+        console.log("tomorrow")
+        dayData = data.forecast.forecastday[1];
+      }
+
+      const hourData = dayData.hour[targetDate.getHours()];
 
       return {
         time: targetDate.getHours().toString().padStart(2, '0') + ':00',
         temp: Math.round(hourData.temp_c),
-        dateTime: targetDate.toISOString()
+       
       };
     };
 
+    // Prepare the hourly forecast, considering past, current, and future hours
     const hourlyForecast = [
-      getHourData(-3),
-      getHourData(-2),
-      getHourData(-1),
-      getHourData(0),
-      getHourData(1)
+      getHourData(localTime, -3),
+      getHourData(localTime, -2),
+      getHourData(localTime, -1),
+      getHourData(localTime, 0),
+      getHourData(localTime, 1)
     ];
 
-    localTime.setMinutes(0);
+    // Compile weather info
     const weatherInfo = {
       city: data.location.name,
       country: data.location.country,

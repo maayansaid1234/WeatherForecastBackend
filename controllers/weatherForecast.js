@@ -13,16 +13,11 @@ async function getForecast(req, res) {
     // Get the local time of the city
     const localTime = new Date(data.location.localtime);
     const currentHour = localTime.getHours();
-
     let previousDayData = null;
 
     // Check if we need previous day's data
     if (currentHour <= 2) {
-      const previousDate = new Date(localTime);
-      // previousDate.setDate(localTime.getDate() );
-      const previousDayStr = previousDate.toISOString().split('T')[0];
-      console.log(previousDayStr)
-      console.log(currentHour)
+      const previousDayStr =`${localTime.getFullYear()}-${localTime.getMonth()}-${localTime.getDate()-1}`;
       const historyUrl = `http://api.weatherapi.com/v1/history.json?key=${apiKey}&q=${city}&dt=${previousDayStr}`;
       const previousResponse = await axios.get(historyUrl);
       previousDayData = previousResponse.data;
